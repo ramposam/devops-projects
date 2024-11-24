@@ -1,0 +1,52 @@
+# This docker compose yml file is used to create two containers
+# 1 as postgres
+# 2 as airflow with web server and scheduler running
+# Airflow only logs to AWS s3 and create no logs on airflow server.
+# Create a dags folder where you are keeping docker compose yml and have sample dag to be visible after the airflow up
+services:
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  airflow:
+    build:
+      context: .
+    container_name: airflow
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: "LocalExecutor" # Change execute to CelearyExecutor when you run on distributed env.
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow@postgres:5432/airflow"
+      AIRFLOW__CORE__FERNET_KEY: "9SDPnoaCrci1aLyM3GyMP7nYOnIc7YVS3ll-a1wPlMw=" # create random fernet key using cryptography lib
+      AIRFLOW__WEBSERVER__RBAC: "True"
+      AIRFLOW__CORE__REMOTE_LOGGING: "True"
+      AIRFLOW__CORE__REMOTE_LOG_CONN_ID: "AirflowS3Connection"
+      AIRFLOW__CORE__REMOTE_BASE_LOG_FOLDER: "s3://bucket-name/logs/"
+      AIRFLOW__CORE__BASE_LOG_FOLDER: "/opt/airflow/empty_logs"
+
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+#      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --password admin --firstname Airflow --lastname Admin --role Admin  --email admin@example.com &&
+      airflow scheduler & airflow webserver "
+    restart: always
+
+volumes:
+  postgres_data:
+
+
