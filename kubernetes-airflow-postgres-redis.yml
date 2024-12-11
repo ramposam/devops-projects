@@ -3,7 +3,7 @@
 # Use nodes ip(internal) to communicate postgres db, redis as we have set airflow executor as celert executor requires redis
 # Create service for public/external ip of airflow web
 # Incase if it's failing for first time try deployig again, fix the issue if any
-
+# Create Persistent volumn for postgres db
 
 # Postgres PersistentVolumeClaim
 apiVersion: v1
