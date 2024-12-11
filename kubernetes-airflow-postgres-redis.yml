@@ -1,0 +1,193 @@
+# This yaml helps you to create 3 pods for postgres, redis and airflow on azure kubernetes.
+# Hopefully this works for any cloud which has kubernetes
+# Use nodes ip(internal) to communicate postgres db, redis as we have set airflow executor as celert executor requires redis
+# Create service for public/external ip of airflow web
+# Incase if it's failing for first time try deployig again, fix the issue if any
+
+
+# Postgres PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+
+# Postgres NodePort Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+spec:
+  type: NodePort
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: 30042 # Explicit NodePort; ensure it's within 30000–32767
+
+---
+
+# Postgres Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-secret # Ensure the secret exists in your cluster
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+              subPath: postgres-data # Ensures partial use of the PVC
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+---
+
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:6
+          ports:
+            - containerPort: 6379
+
+---
+
+# Redis ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      
+      
+# Airflow Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-deployment
+  labels:
+    app: airflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow
+  template:
+    metadata:
+      labels:
+        app: airflow
+    spec:
+      containers:
+        - name: airflow-webserver
+          image: apache/airflow:2.6.3
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: airflow-secret # Ensure the secret exists in your cluster
+          env:
+            - name: AIRFLOW__CORE__EXECUTOR
+              value: CeleryExecutor
+            - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+              value: postgresql+psycopg2://airflow:airflow@postgres-service:5432/airflow
+            - name: AIRFLOW__CELERY__BROKER_URL
+              value: redis://redis-service:6379/0
+            - name: AIRFLOW__CELERY__RESULT_BACKEND
+              value: db+postgresql://airflow:airflow@postgres-service:5432/airflow
+            - name: AIRFLOW__LOGGING__REMOTE_LOGGING
+              value: "True"
+            - name: AIRFLOW__LOGGING__REMOTE_BASE_LOG_FOLDER
+              value: "s3://rposam-devops-airflow/logs"
+            - name: AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID
+              value: "AirflowS3Connection"
+            - name: AIRFLOW__CORE__DAGS_FOLDER
+              value: "s3://rposam-devops-airflow/dags"
+          command:
+            - bash
+            - -c
+            - |
+              airflow db init &&
+              airflow users create \
+                --username "$ADMIN_USERNAME" \
+                --password "$ADMIN_PASSWORD" \
+                --firstname Airflow \
+                --lastname Admin \
+                --role Admin \
+                --email admin@example.com &&
+              airflow scheduler &
+              airflow webserver
+          volumeMounts:
+            - name: airflow-logs
+              mountPath: /opt/airflow/logs
+            - name: airflow-dags
+              mountPath: /opt/airflow/dags
+      volumes:
+        - name: airflow-logs
+          emptyDir: {} # Logs stored temporarily, change as per requirements
+        - name: airflow-dags
+          emptyDir: {} # DAGs stored temporarily, consider using PersistentVolume
+
+---
+
+# Airflow Webserver LoadBalancer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-webserver
+spec:
+  type: LoadBalancer
+  selector:
+    app: airflow
+  ports:
+    - port: 8080
+      targetPort: 8080
