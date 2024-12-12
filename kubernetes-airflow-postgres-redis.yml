@@ -5,6 +5,35 @@
 # Incase if it's failing for first time try deployig again, fix the issue if any
 # Create Persistent volumn for postgres db
 
+---
+# Kubernetes Secrets for PostgreSQL
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  labels:
+    app: postgres
+type: Opaque
+data:
+  POSTGRES_USER: YWlyZmxvdw==             # Base64-encoded value for "airflow"
+  POSTGRES_PASSWORD: YWlyZmxvdw== # Base64-encoded value for "airflow"
+  POSTGRES_DB: YWlyZmxvdw==       # Base64-encoded value for "airflow"
+
+---
+# Kubernetes Secrets for Airflow
+apiVersion: v1
+kind: Secret
+metadata:
+  name: airflow-secret
+  labels:
+    app: airflow
+type: Opaque
+data:
+  ADMIN_USERNAME: YWRtaW4=            # Base64-encoded value for "admin"
+  ADMIN_PASSWORD: YWRtaW4=            # Base64-encoded value for "admin"
+  ADMIN_EMAIL: YWRtaW5AZXhhbXBsZS5jb20= # Base64-encoded value for "admin@example.com"
+
+
 # Postgres PersistentVolumeClaim
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -31,7 +60,7 @@ spec:
   ports:
     - port: 5432
       targetPort: 5432
-      nodePort: 30042 # Explicit NodePort; ensure it's within 30000–32767
+      nodePort: 30042 # Ensure it’s within 30000–32767
 
 ---
 
@@ -63,11 +92,27 @@ spec:
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
-              subPath: postgres-data # Ensures partial use of the PVC
+              subPath: postgres-data
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:
             claimName: postgres-pvc
+
+---
+
+# Redis NodePort Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+spec:
+  type: NodePort
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      nodePort: 30072 # Ensure it’s within 30000–32767
 
 ---
 
@@ -96,20 +141,6 @@ spec:
 
 ---
 
-# Redis ClusterIP Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis-service
-spec:
-  type: ClusterIP
-  selector:
-    app: redis
-  ports:
-    - port: 6379
-      targetPort: 6379
-      
-      
 # Airflow Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -150,8 +181,6 @@ spec:
               value: "s3://rposam-devops-airflow/logs"
             - name: AIRFLOW__LOGGING__REMOTE_LOG_CONN_ID
               value: "AirflowS3Connection"
-            - name: AIRFLOW__CORE__DAGS_FOLDER
-              value: "s3://rposam-devops-airflow/dags"
           command:
             - bash
             - -c
@@ -165,6 +194,7 @@ spec:
                 --role Admin \
                 --email admin@example.com &&
               airflow scheduler &
+              airflow celery worker &
               airflow webserver
           volumeMounts:
             - name: airflow-logs
@@ -173,9 +203,9 @@ spec:
               mountPath: /opt/airflow/dags
       volumes:
         - name: airflow-logs
-          emptyDir: {} # Logs stored temporarily, change as per requirements
+          emptyDir: {} # Temporary storage; adjust as needed
         - name: airflow-dags
-          emptyDir: {} # DAGs stored temporarily, consider using PersistentVolume
+          emptyDir: {} # Temporary storage; use PersistentVolume if required
 
 ---
 
