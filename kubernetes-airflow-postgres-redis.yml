@@ -7,34 +7,6 @@
 # Create AirflowS3Connection on airflow UI as it's required for dag logs to push to s3.
 # Connect to postgres pod and su postgres, psql -U airflow
 # to connect db \c, to list tables on db \dt
----
-# Kubernetes Secrets for PostgreSQL
-apiVersion: v1
-kind: Secret
-metadata:
-  name: postgres-secret
-  labels:
-    app: postgres
-type: Opaque
-data:
-  POSTGRES_USER: YWlyZmxvdw==             # Base64-encoded value for "airflow"
-  POSTGRES_PASSWORD: YWlyZmxvdw== # Base64-encoded value for "airflow"
-  POSTGRES_DB: YWlyZmxvdw==       # Base64-encoded value for "airflow"
-
----
-# Kubernetes Secrets for Airflow
-apiVersion: v1
-kind: Secret
-metadata:
-  name: airflow-secret
-  labels:
-    app: airflow
-type: Opaque
-data:
-  ADMIN_USERNAME: YWRtaW4=            # Base64-encoded value for "admin"
-  ADMIN_PASSWORD: YWRtaW4=            # Base64-encoded value for "admin"
-  ADMIN_EMAIL: YWRtaW5AZXhhbXBsZS5jb20= # Base64-encoded value for "admin@example.com"
-
 
 # Postgres PersistentVolumeClaim
 apiVersion: v1
