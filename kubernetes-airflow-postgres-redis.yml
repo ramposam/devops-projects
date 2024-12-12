@@ -4,7 +4,9 @@
 # Create service for public/external ip of airflow web
 # Incase if it's failing for first time try deployig again, fix the issue if any
 # Create Persistent volumn for postgres db
-
+# Create AirflowS3Connection on airflow UI as it's required for dag logs to push to s3.
+# Connect to postgres pod and su postgres, psql -U airflow
+# to connect db \c, to list tables on db \dt
 ---
 # Kubernetes Secrets for PostgreSQL
 apiVersion: v1
