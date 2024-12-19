@@ -1,0 +1,75 @@
+helm repo add jfrog https://charts.jfrog.io
+
+helm repo update
+
+kubectl create namespace artifactory
+
+export MASTER_KEY=$(openssl rand -hex 32)
+echo ${MASTER_KEY}
+kubectl create secret generic jfrog-masterkey-secret  --from-literal=master-key=${MASTER_KEY} --namespace artifactory
+export JOIN_KEY=$(openssl rand -hex 32)
+echo ${JOIN_KEY}
+kubectl create secret generic jfrog-joinkey-secret --from-literal=join-key=${JOIN_KEY} --namespace artifactory
+
+helm upgrade --install artifactory --set artifactory.masterKey=${MASTER_KEY} --set artifactory.joinKey=${JOIN_KEY} --namespace artifactory --create-namespace jfrog/artifactory
+
+Congratulations. You have just deployed JFrog Artifactory!
+
+1. Get the Artifactory URL by running these commands:
+
+   NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+         You can watch the status of the service by running 'kubectl get svc --namespace artifactory -w artifactory-artifactory-nginx'
+   export SERVICE_IP=$(kubectl get svc --namespace artifactory artifactory-artifactory-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+   echo http://$SERVICE_IP/
+
+2. Open Artifactory in your browser
+   Default credential for Artifactory:
+   user: admin
+   password: password
+
+
+
+# To delete all the deployments, services, statefulsets
+
+helm delete $(helm ls --short)
+
+
+kubectl delete statefulset.apps/artifactory-postgresql -n artifactory
+
+
+kubectl delete statefulset.apps/artifactory -n artifactory
+
+
+kubectl delete deployment.apps/artifactory-artifactory-nginx -n artifactory
+
+
+kubectl delete service/artifactory-postgresql-headless -n artifactory
+
+
+kubectl delete service/artifactory-postgresql -n artifactory
+
+
+kubectl delete service/artifactory -n artifactory
+
+
+kubectl delete service/artifactory-artifactory-nginx -n artifactory
+
+
+kubectl delete pvc artifactory-volume-artifactory-0 -n artifactory
+
+
+kubectl delete pvc data-artifactory-postgresql-0 -n artifactory
+
+
+kubectl delete secret artifactory-nginx-certificate -n artifactory
+
+kubectl delete secret artifactory-postgresql       -n artifactory
+        
+kubectl delete secret artifactory-unified-secret -n artifactory
+
+kubectl delete secret jfrog-joinkey-secret   -n artifactory
+
+kubectl delete secret jfrog-masterkey-secret    -n artifactory
+
+kubectl delete secret sh.helm.release.v1.artifactory.v1  -n artifactory
+
